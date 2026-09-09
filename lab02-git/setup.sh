@@ -23,8 +23,10 @@ git config user.email "opr-course@example.invalid"
 
 cp "$HERE/fixture/base/order.py" .
 cp "$HERE/fixture/base/money.py" .
+cp "$HERE/fixture/base/catalog.py" .
 cp "$HERE/fixture/base/check.py" .
 chmod +x check.py
+printf '__pycache__/\n' > .gitignore
 git add .
 git commit -q -m "Начальная версия расчёта заказа"
 BASE=$(git rev-parse HEAD)
@@ -38,6 +40,17 @@ git add money.py
 git commit -q -m "Исправить формат отрицательных сумм"
 git reset -q --hard HEAD~1
 
+git switch -q -c feature/naming "$BASE"
+cp "$HERE/fixture/naming/catalog.py" catalog.py
+git add catalog.py
+git commit -q -m "Переименовать item_title в format_item"
+
+git switch -q -c feature/receipt "$BASE"
+cp "$HERE/fixture/receipt/receipt.py" receipt.py
+cp "$HERE/fixture/receipt/test_receipt.py" test_receipt.py
+git add receipt.py test_receipt.py
+git commit -q -m "Добавить сборку чека"
+
 git switch -q -c feature/shipping "$BASE"
 cp "$HERE/fixture/shipping/order.py" order.py
 git add order.py
@@ -45,4 +58,5 @@ git commit -q -m "Добавить стоимость доставки"
 
 echo "Готово: $SHOP"
 echo "Текущая ветка: feature/shipping"
+echo "Ветки в работе: main, feature/naming, feature/receipt"
 echo "Условие: $HERE/README.md"

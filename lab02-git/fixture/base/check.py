@@ -50,6 +50,28 @@ def check_recovery():
     return True
 
 
+def check_semantic():
+    for branch in ("feature/naming", "feature/receipt"):
+        if git("merge-base", "--is-ancestor", branch, "HEAD").returncode != 0:
+            return fail(f"ветка {branch} ещё не слита в текущую")
+    tests = subprocess.run(
+        [sys.executable, "-m", "unittest", "discover", "-p", "test_*.py"],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    if tests.returncode != 0:
+        last = tests.stdout.strip().splitlines()[-1] if tests.stdout.strip() else ""
+        return fail(f"слияние прошло, но тесты падают ({last})")
+    try:
+        from receipt import build
+
+        items = [{"name": "Кружка", "price": 1000, "quantity": 2}]
+        assert build(items) == "Кружка x2 — 20.00 ₽\nИтого: 20.00 ₽"
+    except (AssertionError, ImportError, NameError) as error:
+        return fail(f"чек собирается неверно ({error})")
+    print("PASS: семантический конфликт найден и исправлен, тесты зелёные")
+    return True
+
+
 def check_clean():
     if git("status", "--porcelain").stdout:
         return fail("есть незакоммиченные изменения")
@@ -57,5 +79,5 @@ def check_clean():
     return True
 
 
-results = [check_merge(), check_recovery(), check_clean()]
+results = [check_merge(), check_recovery(), check_semantic(), check_clean()]
 sys.exit(0 if all(results) else 1)
