@@ -34,13 +34,21 @@ def report(ok, success, failure):
 
 
 commits_result = git("rev-list", "--reverse", "start..HEAD")
-commits = commits_result.stdout.splitlines() if commits_result.returncode == 0 else []
+all_commits = commits_result.stdout.splitlines() if commits_result.returncode == 0 else []
+
+
+def paths_of(commit):
+    return set(git("diff-tree", "--no-commit-id", "--name-only", "-r", commit).stdout.splitlines())
+
+
+# Отдельный коммит, в котором нет ничего, кроме .gitignore, допускается и не считается задачей.
+commits = [commit for commit in all_commits if paths_of(commit) != {".gitignore"}]
 
 
 def check_two_commits():
     if len(commits) != 2:
-        return report(False, "", "после start должно быть ровно два коммита")
-    subjects = [git("show", "-s", "--format=%s", commit).stdout.strip() for commit in commits]
+        return report(False, "", "после start должно быть ровно два содержательных коммита (отдельный коммит с .gitignore допускается)")
+    subjects = [git("show", "-s", "--format=%s", commit).stdout.strip() for commit in all_commits]
     ok = all(subject.lower() not in {"wip", "fix", "lab1"} and len(subject) >= 12 for subject in subjects)
     return report(
         ok,
@@ -58,7 +66,7 @@ def check_separation():
     ]
     seen = []
     for commit in commits:
-        paths = set(git("diff-tree", "--no-commit-id", "--name-only", "-r", commit).stdout.splitlines())
+        paths = paths_of(commit)
         paths.discard(".gitignore")
         seen.append(paths)
     ok = len(seen) == 2 and seen[0] in groups and seen[1] in groups and seen[0] != seen[1]
@@ -85,7 +93,7 @@ def tests_pass_at(commit):
 
 
 def check_tests():
-    ok = len(commits) == 2 and all(tests_pass_at(commit) for commit in commits)
+    ok = len(commits) == 2 and all(tests_pass_at(commit) for commit in all_commits)
     return report(
         ok,
         "тесты проходят после каждого коммита",

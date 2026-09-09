@@ -24,6 +24,7 @@ git config user.email "opr-course@example.invalid"
 cp "$HERE/fixture/base/"*.py .
 cp "$HERE/fixture/check.py" check.py
 chmod +x check.py
+printf '__pycache__/\n' > .gitignore
 git add .
 git commit -q -m "Начальная версия магазина"
 git tag start
