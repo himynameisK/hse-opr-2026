@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Не наследуем окружение вызывающего: иначе лаба уедет в чужой репозиторий.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LAB="${1:-$HOME/opr-lab02}"
 SHOP="$LAB/shop"
@@ -10,7 +13,7 @@ command -v python3 >/dev/null || { echo "python3 не найден" >&2; exit 1;
 
 if [[ -e "$LAB" ]]; then
   echo "Каталог уже существует: $LAB" >&2
-  echo "Удалите его сами или укажите другой: make lab2 DEST=/tmp/opr-lab02" >&2
+  echo "Удалите его сами или укажите другой: make lab2 LAB2_DEST=/tmp/opr-lab02" >&2
   exit 1
 fi
 
@@ -20,6 +23,8 @@ git init -q
 git symbolic-ref HEAD refs/heads/main
 git config user.name "OPR Course"
 git config user.email "opr-course@example.invalid"
+git config commit.gpgsign false
+git config tag.gpgsign false
 
 cp "$HERE/fixture/base/order.py" .
 cp "$HERE/fixture/base/money.py" .

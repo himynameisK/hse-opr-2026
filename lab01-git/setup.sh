@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Не наследуем окружение вызывающего: иначе лаба уедет в чужой репозиторий.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LAB="${1:-$HOME/opr-lab01}"
 SHOP="$LAB/shop"
@@ -20,6 +23,8 @@ git init -q
 git symbolic-ref HEAD refs/heads/main
 git config user.name "OPR Course"
 git config user.email "opr-course@example.invalid"
+git config commit.gpgsign false
+git config tag.gpgsign false
 
 cp "$HERE/fixture/base/"*.py .
 cp "$HERE/fixture/check.py" check.py
