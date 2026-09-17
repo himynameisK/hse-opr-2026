@@ -1,0 +1,9 @@
+# Скрипты и текст всегда приезжают с LF, даже если у студента core.autocrlf=true
+# (это выбор по умолчанию в установщике Git for Windows). Иначе bash умирает
+# на второй строке setup.sh: set: pipefail: invalid option name
+* text=auto eol=lf
+
+# Байт-в-байт, нормализовать нельзя: подписи HMAC считаны по этим самым байтам
+*.json -text
+*.sig  -text
+*.pdf  binary

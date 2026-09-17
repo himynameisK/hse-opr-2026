@@ -1,9 +1,23 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import os
 import subprocess
 import sys
 
 sys.dont_write_bytecode = True
+
+# На Windows вывод в пайп берёт кодировку системы (cp1251/cp866), и символы ₽ и —
+# роняют проверку с UnicodeEncodeError вместо читаемого FAIL.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+# Не наследуем окружение вызывающего: иначе проверка уедет в чужой репозиторий
+# и покажет FAIL на верном решении. То же самое делает setup.sh.
+for _v in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY"):
+    os.environ.pop(_v, None)
 
 
 def git(*args):

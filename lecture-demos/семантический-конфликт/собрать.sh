@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Собирает репозиторий для слайдов 19–21 лекции 2.
+# Собирает репозиторий для слайдов 22–25 лекции 2.
 # Две ветки правят РАЗНЫЕ файлы, слияние проходит чисто, тесты падают.
 set -euo pipefail
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
@@ -66,4 +66,4 @@ git add . && git commit -q -m "Добавить дневной отчёт"
 
 git switch -q feature/rename
 echo "Готово: $DEST"
-echo "Вы на ветке feature/rename. Дальше по слайду 19: git merge feature/report"
+echo "Вы на ветке feature/rename. Дальше по слайду 22: git merge --no-edit --no-stat feature/report"

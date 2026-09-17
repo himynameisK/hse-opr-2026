@@ -7,6 +7,14 @@ import tarfile
 import tempfile
 
 sys.dont_write_bytecode = True
+
+# На Windows вывод в пайп берёт кодировку системы (cp1251/cp866), и символы ₽ и —
+# роняют проверку с UnicodeEncodeError вместо читаемого FAIL.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 ROOT = Path.cwd()
 PYTHON = sys.executable
 

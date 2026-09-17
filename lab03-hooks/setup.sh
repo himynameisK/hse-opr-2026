@@ -5,15 +5,26 @@ set -euo pipefail
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-LAB="${1:-$HOME/opr-lab03}"
+# Разворачиваем РЯДОМ с репозиторием курса, а не в домашнем каталоге:
+# так лаба лежит там же, куда вы его скачали, и её видно.
+REPO="$(dirname "$HERE")"
+LAB="${1:-$(dirname "$REPO")/opr-lab03}"
 SHOP="$LAB/shop"
 
 command -v git >/dev/null || { echo "git не найден" >&2; exit 1; }
-command -v python3 >/dev/null || { echo "python3 не найден" >&2; exit 1; }
+PY=""
+for c in python3 python py; do
+  command -v "$c" >/dev/null 2>&1 || continue
+  "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3,8) else 1)' >/dev/null 2>&1 || continue
+  PY="$c"; break
+done
+[ -n "$PY" ] || { echo "Python 3.8+ не найден (пробовал python3, python, py)" >&2; exit 1; }
 
 if [[ -e "$LAB" ]]; then
   echo "Каталог уже существует: $LAB" >&2
-  echo "Удалите его сами или укажите другой: make lab3 LAB3_DEST=/tmp/opr-lab03" >&2
+  echo "Удалите его сами: rm -rf \"$LAB\"" >&2
+  echo "Или разверните в другой: make lab3 LAB3_DEST=/tmp/opr-lab03" >&2
+  echo "Без make (Git Bash на Windows): bash lab03-hooks/setup.sh /tmp/opr-lab03" >&2
   exit 1
 fi
 
@@ -23,6 +34,9 @@ git init -q
 git symbolic-ref HEAD refs/heads/main
 git config user.name "OPR Course"
 git config user.email "opr-course@example.invalid"
+# Иначе при core.autocrlf=true у студента файлы лабы уедут в CRLF
+git config core.autocrlf false
+git config core.eol lf
 git config commit.gpgsign false
 git config tag.gpgsign false
 

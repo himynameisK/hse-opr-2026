@@ -12,12 +12,13 @@ echo; echo "2. Объект целиком — обратите внимание
 git cat-file -p $FIRST | sed 's/^/   /'
 echo; echo "3. Весь Git на тот момент:"
 git ls-tree --name-only $FIRST | tr '\n' ' ' | fold -s -w 74 | sed 's/^/   /'
+echo
 echo "   $(git show $FIRST --stat | tail -1 | sed 's/^ *//')"
 echo "   сегодня: $(git ls-files | wc -l | tr -d ' ') файлов"
 echo; echo "4. README из того коммита:"
 git show $FIRST:README | head -4 | sed 's/^/   /'
 echo; echo "5. А теперь сегодняшний код:"
-git blame -L 1,5 read-cache.c | sed 's/^/   /'
+git blame -L 1,5 --date=short read-cache.c | sed 's/^/   /'
 echo
 echo "   строк от 7 апреля 2005 живо в read-cache.c: $(git blame read-cache.c 2>/dev/null | grep -c '2005-04-0[78]')"
 echo "   коммит 8bc9a0c769 сделан через три минуты после первого"
