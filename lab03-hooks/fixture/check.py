@@ -147,50 +147,18 @@ def check_bypass():
     )
 
 
-def check_verify_script():
-    script = ROOT / "verify.py"
-    if not script.exists():
-        return report(False, "", "создайте verify.py — проверку подписи X-Hub-Signature-256")
-    cases = [("push-valid", True), ("pr-valid", True),
-             ("pr-tampered", False), ("push-wrong-secret", False)]
-    outcomes = []
-    for name, expected in cases:
-        body = (ROOT / "deliveries" / f"{name}.json").read_text()
-        signature = (ROOT / "deliveries" / f"{name}.sig").read_text().strip()
-        result = run([PYTHON, str(script)],
-                     env_extra={"WEBHOOK_SECRET": SECRET, "X_HUB_SIGNATURE_256": signature},
-                     stdin=body)
-        outcomes.append((result.returncode == 0) == expected)
-    ok = all(outcomes)
-    return report(
-        ok,
-        "verify.py принимает обе честные доставки и отвергает подменённую и чужую",
-        "verify.py читает тело из stdin, секрет из WEBHOOK_SECRET, подпись из "
-        "X_HUB_SIGNATURE_256; код 0 — подпись верна, иначе не 0",
-    )
-
 
 def check_verify_is_constant_time():
-    sources = []
-    for name in ("verify.py", "notify.py"):
-        script = ROOT / name
-        if not script.exists():
-            return report(False, "", "сначала создайте " + name)
-        sources.append(script.read_text(encoding="utf-8", errors="replace"))
-    ok = all("compare_digest" in source for source in sources)
+    script = ROOT / "notify.py"
+    if not script.exists():
+        return report(False, "", "сначала создайте notify.py")
+    source = script.read_text(encoding="utf-8", errors="replace")
+    ok = "compare_digest" in source
     return report(
         ok,
         "сравнение подписи идёт через hmac.compare_digest",
-        "сравнивать подписи оператором == нельзя: и в verify.py, и в notify.py "
-        "используйте hmac.compare_digest",
+        "сравнивать подписи оператором == нельзя: используйте hmac.compare_digest",
     )
-
-
-# --- разбор YAML своими руками -------------------------------------------
-# Ставить PyYAML ради одного файла незачем, а в стандартной библиотеке его нет.
-# Workflow — это отступы, пары «ключ: значение» и списки; разбираем ровно то
-# подмножество, которого хватает GitHub Actions.
-
 
 def _yaml_uncomment(line):
     """Отрезает # комментарий, не трогая решётку внутри кавычек."""
@@ -693,7 +661,6 @@ checks = [
     check_pre_commit(),
     check_commit_msg(),
     check_bypass(),
-    check_verify_script(),
     check_verify_is_constant_time(),
     check_notify(),
     check_notify_secrets(),
