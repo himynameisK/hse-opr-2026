@@ -3,8 +3,9 @@
 LAB1_DEST ?=
 LAB2_DEST ?=
 LAB3_DEST ?=
+LAB4_DEST ?=
 
-.PHONY: lab1 lab2 lab3
+.PHONY: lab1 lab2 lab3 lab4
 lab1:
 	@bash lab01-git/setup.sh "$(LAB1_DEST)"
 
@@ -13,3 +14,7 @@ lab2:
 
 lab3:
 	@bash lab03-hooks/setup.sh "$(LAB3_DEST)"
+
+# Занятие 4 разворачивается ВНУТРИ Linux и от root: нужны useradd и mount.
+lab4:
+	@sudo bash lab04-linux/setup.sh "$(LAB4_DEST)"
