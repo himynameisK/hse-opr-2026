@@ -148,17 +148,6 @@ def check_bypass():
 
 
 
-def check_verify_is_constant_time():
-    script = ROOT / "notify.py"
-    if not script.exists():
-        return report(False, "", "сначала создайте notify.py")
-    source = script.read_text(encoding="utf-8", errors="replace")
-    ok = "compare_digest" in source
-    return report(
-        ok,
-        "сравнение подписи идёт через hmac.compare_digest",
-        "сравнивать подписи оператором == нельзя: используйте hmac.compare_digest",
-    )
 
 def _yaml_uncomment(line):
     """Отрезает # комментарий, не трогая решётку внутри кавычек."""
@@ -514,141 +503,52 @@ def check_workflow():
     )
 
 
-TELEGRAM_ENV = {
-    "WEBHOOK_SECRET": SECRET,
-    "TELEGRAM_BOT_TOKEN": "111111:TEST-TOKEN-AAA",
-    "TELEGRAM_CHAT_ID": "-1001234567890",
-}
-TELEGRAM_KEYS = ("WEBHOOK_SECRET", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID")
 
 
-def run_notify(delivery, env_extra, folder=None):
-    """notify.py на записанной доставке. stderr не подмешиваем: stdout — это запрос."""
-    folder = Path(folder) if folder else ROOT / "deliveries"
-    environment = os.environ.copy()
-    environment["PYTHONDONTWRITEBYTECODE"] = "1"
-    environment["PYTHONIOENCODING"] = "utf-8"
-    for key in TELEGRAM_KEYS:
-        environment.pop(key, None)
-    environment.update(env_extra)
-    result = subprocess.run(
-        [PYTHON, str(ROOT / "notify.py"),
-         str(folder / (delivery + ".json")),
-         str(folder / (delivery + ".sig"))],
-        cwd=ROOT, env=environment,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        encoding="utf-8", errors="replace",
-    )
-    return result.returncode, result.stdout
 
 
-def multiline_delivery(directory):
-    """Доставка с переводом строки в теле: такую переживает только чтение байтами."""
-    body = (
-        '{"action": "opened", "number": 7,\r\n'
-        ' "pull_request": {"title": "SHOP-15 Хуки для магазина",\r\n'
-        '  "user": {"login": "student"}, "changed_files": 3,\r\n'
-        '  "additions": 61, "deletions": 4},\r\n'
-        ' "repository": {"full_name": "student/opr-shop"}}'
-    ).encode("utf-8")
-    signature = "sha256=" + hmac.new(SECRET.encode("utf-8"), body, hashlib.sha256).hexdigest()
-    (directory / "pr-multiline.json").write_bytes(body)
-    # write_bytes, а не write_text: на Windows write_text подменил бы \n на \r\n.
-    (directory / "pr-multiline.sig").write_bytes((signature + "\n").encode("ascii"))
 
 
-def telegram_request(output):
-    """Разбирает напечатанный запрос: строка «POST <url>», следом тело JSON."""
-    lines = [line for line in output.splitlines() if line.strip()]
-    for index, line in enumerate(lines):
-        if line.strip().startswith("POST "):
-            url = line.strip()[5:].strip().strip("\"'")
-            try:
-                body = json.loads("\n".join(lines[index + 1:]))
-            except ValueError:
-                return url, None
-            return url, body if isinstance(body, dict) else None
-    return None, None
 
 
-def sends_to_telegram(output, token, chat_id):
-    url, body = telegram_request(output)
-    return (
-        url == "https://api.telegram.org/bot" + token + "/sendMessage"
-        and body is not None
-        and str(body.get("chat_id", "")) == chat_id
-        and str(body.get("text", "")).strip() != ""
-    )
 
 
-def check_notify():
-    script = ROOT / "notify.py"
-    if not script.exists():
-        return report(False, "", "создайте notify.py — печать запроса в Telegram по доставке вебхука")
-    code, output = run_notify("pr-valid", TELEGRAM_ENV)
-    _, body = telegram_request(output)
-    text = str(body.get("text", "")) if body else ""
-    prints_call = (
-        code == 0
-        and sends_to_telegram(output, TELEGRAM_ENV["TELEGRAM_BOT_TOKEN"],
-                              TELEGRAM_ENV["TELEGRAM_CHAT_ID"])
-        and "student/opr-shop" in text
-        and "7" in text
-    )
-    silent = []
-    for delivery in ("pr-tampered", "push-wrong-secret"):
-        code, output = run_notify(delivery, TELEGRAM_ENV)
-        silent.append(code != 0 and "api.telegram.org" not in output)
-    code, output = run_notify("push-valid", TELEGRAM_ENV)
-    skips_push = code == 0 and "api.telegram.org" not in output
-    directory = Path(tempfile.mkdtemp())
+
+
+
+
+def check_telegram():
+    """Уведомление в Telegram: файл на месте, триггер переключён на push,
+    токен и chat_id берутся из секретов, а не зашиты в файл."""
+    path = ROOT / ".github" / "workflows" / "telegram.yml"
+    if not path.exists():
+        return report(False, "", "создайте .github/workflows/telegram.yml — "
+                                 "готовый файл есть в условии, его надо положить и поправить")
+    text = path.read_text(encoding="utf-8", errors="replace")
     try:
-        multiline_delivery(directory)
-        code, output = run_notify("pr-multiline", TELEGRAM_ENV, folder=directory)
-        reads_bytes = code == 0 and sends_to_telegram(
-            output, TELEGRAM_ENV["TELEGRAM_BOT_TOKEN"], TELEGRAM_ENV["TELEGRAM_CHAT_ID"])
-    finally:
-        shutil.rmtree(directory, ignore_errors=True)
-    ok = prints_call and all(silent) and skips_push and reads_bytes
-    return report(
-        ok,
-        "notify.py печатает вызов sendMessage на честном pull request и молчит на остальных",
-        "notify.py на pr-valid должен напечатать «POST https://api.telegram.org/bot<TOKEN>/sendMessage» "
-        "и следом тело JSON с chat_id и text (в тексте — репозиторий и номер PR); "
-        "на pr-tampered и push-wrong-secret — ни строчки запроса и код не 0; "
-        "на push-valid — ни строчки запроса и код 0; тело доставки читается байтами "
-        "(open(path, \"rb\"): при чтении текстом ломается подпись доставки с переводом строки)",
-    )
+        data = yaml_load(text)
+    except Exception as error:
+        return report(False, "", f"telegram.yml не читается как YAML: {error}")
 
+    # Ключ on: в YAML 1.1 читается как булево True — учитываем оба написания.
+    triggers = set()
+    for key, value in (data.items() if isinstance(data, dict) else []):
+        if str(key).strip().lower() in ("on", "true"):
+            triggers |= _trigger_names(value)
+    if "push" not in triggers:
+        return report(False, "", "в telegram.yml триггер всё ещё pull_request: "
+                                 "задание — переключить его на push")
 
-def check_notify_secrets():
-    script = ROOT / "notify.py"
-    if not script.exists():
-        return report(False, "", "сначала создайте notify.py")
-    other = {"WEBHOOK_SECRET": SECRET,
-             "TELEGRAM_BOT_TOKEN": "222222:OTHER-TOKEN-BBB",
-             "TELEGRAM_CHAT_ID": "424242"}
-    code, output = run_notify("pr-valid", other)
-    follows_env = code == 0 and sends_to_telegram(
-        output, other["TELEGRAM_BOT_TOKEN"], other["TELEGRAM_CHAT_ID"])
-    refuses_empty = []
-    for missing in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
-        partial = {key: value for key, value in TELEGRAM_ENV.items() if key != missing}
-        code, output = run_notify("pr-valid", partial)
-        refuses_empty.append(code != 0 and "api.telegram.org" not in output)
-    source = script.read_text(encoding="utf-8", errors="replace")
-    # Значение chat_id из README студент может честно переписать в комментарий,
-    # поэтому его в исходнике не ищем: за это отвечают запуски выше.
-    not_hardcoded = (TELEGRAM_ENV["TELEGRAM_BOT_TOKEN"] not in source
-                     and ("environ" in source or "getenv" in source))
-    ok = follows_env and all(refuses_empty) and not_hardcoded
-    return report(
-        ok,
-        "токен и chat_id берутся из окружения, а не из репозитория",
-        "TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID должны читаться из окружения: с другими "
-        "значениями меняется и запрос, а без любой из них скрипт выходит с ненулевым "
-        "кодом и ничего не печатает — без значения по умолчанию в коде",
-    )
+    зашит = re.search(r'(?<!secrets\.)\b\d{8,}:[A-Za-z0-9_-]{30,}', text)
+    if зашит:
+        return report(False, "", "токен бота зашит прямо в файл — он должен приходить "
+                                 "из secrets.TELEGRAM_BOT_TOKEN")
+    нужны = [n for n in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID")
+             if f"secrets.{n}" not in text]
+    if нужны:
+        return report(False, "", "в telegram.yml не хватает обращений к секретам: "
+                                 + ", ".join(нужны))
+    return report(True, "telegram.yml: триггер push, токен и chat_id из секретов", "")
 
 
 def check_clean():
@@ -661,9 +561,7 @@ checks = [
     check_pre_commit(),
     check_commit_msg(),
     check_bypass(),
-    check_verify_is_constant_time(),
-    check_notify(),
-    check_notify_secrets(),
+    check_telegram(),
     check_workflow(),
     check_clean(),
 ]
