@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""Автопроверка занятия 3: хуки и подпись вебхука."""
-import hashlib
-import hmac
-import json
+"""Автопроверка занятия 3: хуки и проверки на стороне GitHub."""
 import os
 from pathlib import Path
 import re
