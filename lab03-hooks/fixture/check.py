@@ -19,6 +19,20 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 ROOT = Path.cwd()
 PYTHON = sys.executable
+
+
+def _repo_arg():
+    """--repo ПУТЬ: где лежит клон вашего боевого репозитория.
+    Задания 2 и 3 делаются там, а не здесь: Actions живут на GitHub."""
+    for i, a in enumerate(sys.argv):
+        if a == "--repo" and i + 1 < len(sys.argv):
+            return Path(sys.argv[i + 1]).expanduser()
+        if a.startswith("--repo="):
+            return Path(a.split("=", 1)[1]).expanduser()
+    return None
+
+
+REPO = _repo_arg()
 HOOKS = ROOT / ".githooks"
 SECRET = "opr-2026-secret"
 
@@ -358,7 +372,7 @@ def yaml_load(text):
 
 # --- проверка workflow ----------------------------------------------------
 
-WORKFLOWS = ROOT / ".github" / "workflows"
+WORKFLOWS = (REPO or ROOT) / ".github" / "workflows"
 GITLEAKS_TAG = re.compile(r"v3(\.\d+)*\Z")
 
 
@@ -431,10 +445,11 @@ def check_workflow():
         return report(False, "", "создайте .github/workflows/gitleaks.yml — workflow, "
                                  "который ищет секреты в истории")
 
-    relative = path.relative_to(ROOT).as_posix()
+    base = REPO or ROOT
+    relative = path.relative_to(base).as_posix()
     text = path.read_text(encoding="utf-8-sig", errors="replace")
     problems = []
-    listed = run(["git", "ls-files", "--", relative])
+    listed = run(["git", "ls-files", "--", relative], cwd=base)
     if listed.returncode != 0 or not listed.stdout.strip():
         problems.append(f"{relative} не закоммичен")
     # пустая строка, в которой остался таб, YAML не ломает — смотрим только на значащие
@@ -517,7 +532,7 @@ def check_workflow():
 def check_telegram():
     """Уведомление в Telegram: файл на месте, триггер переключён на push,
     токен и chat_id берутся из секретов, а не зашиты в файл."""
-    path = ROOT / ".github" / "workflows" / "telegram.yml"
+    path = WORKFLOWS / "telegram.yml"
     if not path.exists():
         return report(False, "", "создайте .github/workflows/telegram.yml — "
                                  "готовый файл есть в условии, его надо положить и поправить")
@@ -624,8 +639,20 @@ checks = [
     check_pre_commit(),
     check_commit_msg(),
     check_bypass(),
-    check_telegram(),
-    check_workflow(),
     check_clean(),
 ]
+
+if REPO is None:
+    print()
+    print("Задания 2 и 3 делаются в вашем репозитории на GitHub, не здесь.")
+    print("Когда положите туда оба workflow, проверьте их так:")
+    print("    ./check.py --repo ПУТЬ-К-КЛОНУ-ВАШЕГО-РЕПОЗИТОРИЯ")
+elif not (REPO / ".git").is_dir():
+    print()
+    print(f"FAIL: в {REPO} нет репозитория git — проверьте путь")
+    checks.append(False)
+else:
+    checks.append(check_telegram())
+    checks.append(check_workflow())
+
 sys.exit(0 if all(checks) else 1)
