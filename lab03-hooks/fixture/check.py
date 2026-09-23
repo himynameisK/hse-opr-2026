@@ -553,6 +553,72 @@ def check_clean():
     return report(ok, "рабочее дерево чистое", "остались незакоммиченные изменения")
 
 
+# --- необязательный тренажёр: обратный мердж ------------------------------
+
+GITFLOW = ROOT.parent / "gitflow"
+
+
+def _gf(*args):
+    return run(["git", *args], cwd=GITFLOW)
+
+
+def check_gitflow():
+    if not (GITFLOW / ".git").is_dir():
+        return report(False, "", f"не вижу тренажёр в {GITFLOW} — "
+                                 "разверните: bash lab03-hooks/gitflow.sh")
+
+    expected = (GITFLOW / ".opr-main-tip")
+    if expected.is_file():
+        want = expected.read_text().strip()
+        have = _gf("rev-parse", "main").stdout.strip()
+        if want != have:
+            return report(False, "", "main изменился. Долг закрывают со стороны develop, "
+                                     "main трогать не надо: верните его на " + want[:8])
+
+    old_dev = (GITFLOW / ".opr-develop-tip")
+    if old_dev.is_file():
+        base = old_dev.read_text().strip()
+        if _gf("merge-base", "--is-ancestor", base, "develop").returncode != 0:
+            return report(False, "", "историю develop переписали: прежний коммит "
+                                     f"{base[:8]} больше не её предок. Обратный мердж "
+                                     "делается мерджем, а не rebase")
+
+    if _gf("status", "--porcelain").stdout.strip():
+        return report(False, "", "в тренажёре остались незакоммиченные изменения — "
+                                 "долг не закрыт, пока мердж не зафиксирован")
+
+    debt = _gf("log", "--oneline", "develop..main").stdout.strip()
+    if debt:
+        merged_branch = _gf("merge-base", "--is-ancestor",
+                            "release/1.2", "develop").returncode == 0
+        if merged_branch:
+            return report(False, "", "влита сама release/1.2, а не тег v1.2: "
+                                     "merge-коммит из main так и остался вне develop. "
+                                     "Слейте v1.2 — через тег приезжает и то, что попало "
+                                     "в main мимо релиза")
+        return report(False, "", "долг не закрыт: в main есть "
+                                 f"{len(debt.splitlines())} коммит(ов), которых нет в develop. "
+                                 "Посмотрите git log --oneline develop..main")
+
+    pay = _gf("show", "develop:pay.py").stdout
+    if "if card is None" not in pay:
+        return report(False, "", "в develop:pay.py нет проверки на None — "
+                                 "фикс из релиза до develop не доехал")
+
+    parents = _gf("rev-list", "--parents", "-n", "1", "develop").stdout.split()
+    if len(parents) < 3:
+        return report(False, "", "вершина develop — не merge-коммит. "
+                                 "Фикс перенесли копией (cherry-pick?), а связь между "
+                                 "ветками не записана: git снова не будет знать, что релиз влит")
+
+    return report(True, "обратный мердж сделан: долг закрыт, история цела, "
+                        "фикс в develop", "")
+
+
+if "--gitflow" in sys.argv:
+    sys.exit(0 if check_gitflow() else 1)
+
+
 checks = [
     check_installed(),
     check_pre_commit(),

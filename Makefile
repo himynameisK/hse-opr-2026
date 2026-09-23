@@ -5,7 +5,7 @@ LAB2_DEST ?=
 LAB3_DEST ?=
 LAB4_DEST ?=
 
-.PHONY: lab1 lab2 lab3 lab4
+.PHONY: lab1 lab2 lab3 lab3-gitflow lab4
 lab1:
 	@bash lab01-git/setup.sh "$(LAB1_DEST)"
 
@@ -14,6 +14,9 @@ lab2:
 
 lab3:
 	@bash lab03-hooks/setup.sh "$(LAB3_DEST)"
+
+lab3-gitflow:
+	@bash lab03-hooks/gitflow.sh "$(LAB3_DEST)"
 
 # Занятие 4 разворачивается ВНУТРИ Linux и от root: нужны useradd и mount.
 lab4:
