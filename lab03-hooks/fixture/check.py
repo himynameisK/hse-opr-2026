@@ -25,10 +25,19 @@ def _repo_arg():
     """--repo ПУТЬ: где лежит клон вашего боевого репозитория.
     Задания 2 и 3 делаются там, а не здесь: Actions живут на GitHub."""
     for i, a in enumerate(sys.argv):
-        if a == "--repo" and i + 1 < len(sys.argv):
-            return Path(sys.argv[i + 1]).expanduser()
+        if a == "--repo":
+            nxt = sys.argv[i + 1] if i + 1 < len(sys.argv) else ""
+            if not nxt or nxt.startswith("-"):
+                print("FAIL: после --repo нужен путь к клону вашего репозитория, "
+                      "например: ./check.py --repo ~/my-project")
+                sys.exit(1)
+            return Path(nxt).expanduser()
         if a.startswith("--repo="):
-            return Path(a.split("=", 1)[1]).expanduser()
+            value = a.split("=", 1)[1]
+            if not value:
+                print("FAIL: после --repo= нужен путь к клону вашего репозитория")
+                sys.exit(1)
+            return Path(value).expanduser()
     return None
 
 
@@ -647,6 +656,11 @@ if REPO is None:
     print("Задания 2 и 3 делаются в вашем репозитории на GitHub, не здесь.")
     print("Когда положите туда оба workflow, проверьте их так:")
     print("    ./check.py --repo ПУТЬ-К-КЛОНУ-ВАШЕГО-РЕПОЗИТОРИЯ")
+elif REPO.resolve() == ROOT.resolve():
+    print()
+    print("FAIL: --repo указывает на учебную лабу. Нужен ПУТЬ К ВАШЕМУ репозиторию "
+          "на GitHub — тому, куда вы пушите и где работают Actions.")
+    checks.append(False)
 elif not (REPO / ".git").is_dir():
     print()
     print(f"FAIL: в {REPO} нет репозитория git — проверьте путь")
