@@ -43,11 +43,9 @@ git config tag.gpgsign false
 cp "$HERE/fixture/base/"*.py .
 cp "$HERE/fixture/check.py" check.py
 chmod +x check.py
-mkdir -p deliveries
-cp "$HERE/fixture/deliveries/"* deliveries/
 printf '__pycache__/\n' > .gitignore
 git add .
-git commit -q -m "Начальная версия магазина и записанные доставки вебхука"
+git commit -q -m "Начальная версия магазина"
 git tag start
 
 echo "Готово: $SHOP"
