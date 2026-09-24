@@ -126,6 +126,7 @@ git commit -q -m "Начальная версия магазина и карка
 git tag start
 
 echo "Готово: $SHOP"
-echo "В .githooks лежит каркас pre-commit — в нём два места с пометкой ЗАПОЛНИТЬ."
-echo "commit-msg пишете сами. Включить хуки: git config core.hooksPath .githooks"
+echo "В .githooks лежат каркасы обоих хуков на Python: всё, что берётся из git,"
+echo "уже написано. Дописать надо три места с пометкой ЗАПОЛНИТЬ."
+echo "Не забудьте включить: git config core.hooksPath .githooks"
 echo "Условие: $HERE/README.md"
