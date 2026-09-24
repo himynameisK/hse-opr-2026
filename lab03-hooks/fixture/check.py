@@ -505,7 +505,7 @@ def check_workflow():
             f"у actions/checkout fetch-depth: {best['depth_value']}, а нужен 0"
             if best["depth_value"] else
             "у actions/checkout нет with: fetch-depth: 0 — иначе в клоне один коммит, "
-            "а секрет лежит в истории")
+            "и экшену не от чего отсчитывать диапазон пуша")
     if not best["gitleaks"]:
         problems.append(
             f"gitleaks-action взят с тегом {best['wrong_tag']}, а нужен v3"
