@@ -45,49 +45,81 @@ cp "$HERE/fixture/check.py" check.py
 chmod +x check.py
 printf '__pycache__/\n' > .gitignore
 
-# Каркас pre-commit: вся возня с индексом уже написана, студент дописывает
-# два места. commit-msg он пишет сам с нуля — тот посильный.
+# Каркасы обоих хуков на Python: всё, что достаётся из git, уже написано.
+# Студент дописывает только условия. Шебанг — с тем интерпретатором, который
+# здесь реально нашёлся: на Windows это может быть python, а не python3.
 mkdir -p .githooks
-cat > .githooks/pre-commit <<'HOOK'
-#!/usr/bin/env bash
-# Git запускает этот скрипт перед созданием коммита.
-# Ненулевой код возврата — коммит отменён.
-set -uo pipefail
 
-status=0
+{
+printf '#!/usr/bin/env %s\n' "$PY"
+cat <<'HOOK'
+"""pre-commit. Git запускает его перед созданием коммита.
+Ненулевой код возврата — коммит отменён."""
+import re
+import subprocess
+import sys
 
-# --- 1. Файлы, которых в истории быть не должно ------------------------------
-# ЗАПОЛНИТЬ: отклонить .env (и .env.local, .env.prod — любые .env.*)
-while IFS= read -r file; do
-	case "$(basename "$file")" in
-		# сюда шаблон имени, а в теле: echo ... >&2; status=1
-		*) ;;
-	esac
-done < <(git diff --cached --name-only --diff-filter=ACM)
 
-# --- 2. Секрет в добавленных строках -----------------------------------------
-# Берём только добавленные строки индекса. '^[+]' именно в скобках: так шаблон
-# верен во всех реализациях grep. '+++' — служебная строка дифа, её убираем.
-added=$(git diff --cached --diff-filter=ACM -U0 | grep -E '^[+]' | grep -v '^[+][+][+]' || true)
+def git(*args):
+    return subprocess.run(["git", *args], capture_output=True, text=True).stdout
 
-# ЗАПОЛНИТЬ: шаблон присваивания секрета с НЕПУСТЫМ значением.
-#   поймать:     API_KEY="AKIAIOSFODNN7EXAMPLE"   TOKEN=abc123   SECRET='...'
+
+# --- уже достали из git, этим и работайте -----------------------------------
+
+# files — пути файлов, которые уходят в коммит
+files = git("diff", "--cached", "--name-only", "--diff-filter=ACM").split()
+
+# added — добавленные строки индекса, уже без ведущего '+'
+added = [line[1:] for line
+         in git("diff", "--cached", "--diff-filter=ACM", "-U0").splitlines()
+         if line.startswith("+") and not line.startswith("+++")]
+
+status = 0
+
+# --- ЗАПОЛНИТЬ 1 ------------------------------------------------------------
+# Отклонить .env и любые .env.* — пройдитесь по files.
+# При отказе: print(..., file=sys.stderr) и status = 1
+
+
+# --- ЗАПОЛНИТЬ 2 ------------------------------------------------------------
+# Найти в added присваивание секрета с НЕПУСТЫМ значением.
+#   поймать:     API_KEY="AKIAIOSFODNN7EXAMPLE"   TOKEN=abc12345
 #   НЕ поймать:  Не коммитьте токены и пароли.
-# Подсказка: важно не слово, а знак = и непустое значение после него.
-pattern=''
+# Важно не слово, а знак = и непустое значение после него.
 
-if [[ -n "$pattern" ]] && printf '%s\n' "$added" | grep -qE "$pattern"; then
-	echo "pre-commit: похоже на секрет в добавленных строках:" >&2
-	printf '%s\n' "$added" | grep -E "$pattern" >&2
-	status=1
-fi
 
-if [[ $status -ne 0 ]]; then
-	echo "pre-commit: коммит остановлен. Обойти осознанно: git commit --no-verify" >&2
-fi
-exit $status
+# ----------------------------------------------------------------------------
+if status:
+    print("pre-commit: коммит остановлен. Обойти осознанно: git commit --no-verify",
+          file=sys.stderr)
+sys.exit(status)
 HOOK
-chmod +x .githooks/pre-commit
+} > .githooks/pre-commit
+
+{
+printf '#!/usr/bin/env %s\n' "$PY"
+cat <<'HOOK'
+"""commit-msg. Git передаёт сюда ОДИН аргумент: путь к файлу с сообщением.
+Ненулевой код возврата — коммит отменён."""
+import re
+import sys
+
+# --- уже достали, этим и работайте ------------------------------------------
+
+message = open(sys.argv[1], encoding="utf-8").read()
+first_line = message.splitlines()[0] if message.splitlines() else ""
+
+# --- ЗАПОЛНИТЬ --------------------------------------------------------------
+# Принять   «SHOP-12 Добавить расчёт скидки»
+# отклонить «Добавить расчёт скидки» и «shop12 добавить скидку»
+# При отказе: print(..., file=sys.stderr) и sys.exit(1)
+
+
+sys.exit(0)
+HOOK
+} > .githooks/commit-msg
+
+chmod +x .githooks/pre-commit .githooks/commit-msg
 
 git add .
 git commit -q -m "Начальная версия магазина и каркас pre-commit"
