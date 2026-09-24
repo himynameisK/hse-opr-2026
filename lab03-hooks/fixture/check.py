@@ -452,7 +452,7 @@ def check_workflow():
             break
     if path is None:
         return report(False, "", "создайте .github/workflows/gitleaks.yml — workflow, "
-                                 "который ищет секреты в истории")
+                                 "который ищет секреты в истории" + _maybe_pull())
 
     base = REPO or ROOT
     relative = path.relative_to(base).as_posix()
@@ -538,13 +538,24 @@ def check_workflow():
 
 
 
+
+def _maybe_pull():
+    """Файл мог быть создан через веб-интерфейс GitHub — тогда на сервере он есть,
+    а в локальном клоне ещё нет."""
+    if REPO is None:
+        return ""
+    return (". Если файл вы создавали в браузере, на github.com, — он там и остался: "
+            f"сделайте git pull в {REPO}")
+
+
 def check_telegram():
     """Уведомление в Telegram: файл на месте, триггер переключён на push,
     токен и chat_id берутся из секретов, а не зашиты в файл."""
     path = WORKFLOWS / "telegram.yml"
     if not path.exists():
         return report(False, "", "создайте .github/workflows/telegram.yml — "
-                                 "готовый файл есть в условии, его надо положить и поправить")
+                                 "готовый файл есть в условии, его надо положить и поправить"
+                                 + _maybe_pull())
     text = path.read_text(encoding="utf-8", errors="replace")
     try:
         data = yaml_load(text)
