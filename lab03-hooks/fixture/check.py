@@ -121,14 +121,25 @@ def check_pre_commit():
             directory, {"util.py": "def double(x):\n    return x * 2\n"}, "SHOP-3 Утилита")
         allowed_mention = commit_attempt(
             directory, {"README.md": "Не коммитьте токены и пароли.\n"}, "SHOP-4 Заметка")
+        # Ссылка на секрет — не секрет. Наивный хук «ищу слово TOKEN» тут и упадёт,
+        # а не через сорок минут, когда этот файл понадобится в задании 3.
+        allowed_reference = commit_attempt(
+            directory, {"ci.yml": "          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"},
+            "SHOP-5 Workflow")
+        # Имя секрета бывает с приставкой — такое ловить тоже надо.
+        blocked_prefixed = not commit_attempt(
+            directory, {"cfg.py": 'SLACK_TOKEN="ghp_0OkE2rXqVn4mT7sLdB9uYcAz1WpQfH3jKgRv"\n'},
+            "SHOP-6 Слак")
     finally:
         shutil.rmtree(directory, ignore_errors=True)
-    ok = blocked_env and blocked_inline and allowed_clean and allowed_mention
+    ok = (blocked_env and blocked_inline and allowed_clean
+          and allowed_mention and allowed_reference and blocked_prefixed)
     return report(
         ok,
         "pre-commit останавливает секреты и не мешает обычным коммитам",
-        "pre-commit должен отклонять .env и строку вида API_KEY=\"...\", "
-        "но пропускать код без секретов и текст, где слово «токен» просто упомянуто",
+        "pre-commit должен отклонять .env, API_KEY=\"...\" и SLACK_TOKEN=\"...\", "
+        "но пропускать обычный код, текст со словом «токен» "
+        "и строку GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} — это ссылка, а не секрет",
     )
 
 
@@ -418,7 +429,7 @@ def _inspect_job(job, outer_env):
     job_env = dict(outer_env)
     job_env.update(_env_of(job))
     found = {"checkout": False, "depth": False, "gitleaks": False, "token": False,
-             "depth_value": None, "wrong_tag": None}
+             "depth_value": None, "wrong_tag": None, "checkout_ref": None}
     for step in job["steps"]:
         uses = step.get("uses") if isinstance(step, dict) else None
         if not isinstance(uses, str) or "@" not in uses:
@@ -427,6 +438,10 @@ def _inspect_job(job, outer_env):
         action, ref = action.strip().lower(), ref.strip()
         if action == "actions/checkout":
             found["checkout"] = True
+            if not ref:
+                found["checkout_ref"] = "пусто"
+            elif ref == "main":
+                found["checkout_ref"] = "main"
             depth = _with_value(step, "fetch-depth")
             if depth is not None:
                 found["depth_value"] = str(depth).strip()
@@ -496,6 +511,12 @@ def check_workflow():
         return report(False, "", "; ".join(problems))
 
     best = max(reports, key=lambda found: found["score"])
+    if best.get("checkout_ref") == "пусто":
+        problems.append("у actions/checkout не указана версия после @ — "
+                        "GitHub откажется читать такой файл")
+    elif best.get("checkout_ref") == "main":
+        problems.append("actions/checkout взят как @main — ветка переезжает, "
+                        "ваш workflow сломается не по вашей вине; поставьте тег")
     if not best["checkout"]:
         problems.append("в джобе с gitleaks нет шага actions/checkout"
                         if any(found["gitleaks"] for found in reports)
@@ -556,7 +577,17 @@ def check_telegram():
         return report(False, "", "создайте .github/workflows/telegram.yml — "
                                  "готовый файл есть в условии, его надо положить и поправить"
                                  + _maybe_pull())
+    base = REPO or ROOT
+    relative = path.relative_to(base).as_posix()
+    listed = run(["git", "ls-files", "--", relative], cwd=base)
+    if listed.returncode != 0 or not listed.stdout.strip():
+        return report(False, "", f"{relative} не закоммичен")
+
     text = path.read_text(encoding="utf-8", errors="replace")
+    if any("\t" in line[:len(line) - len(line.lstrip())]
+           for line in text.splitlines() if line.strip()):
+        return report(False, "", "в telegram.yml отступы сделаны табами — "
+                                 "YAML понимает только пробелы")
     try:
         data = yaml_load(text)
     except Exception as error:
@@ -570,6 +601,19 @@ def check_telegram():
     if "push" not in triggers:
         return report(False, "", "в telegram.yml триггер всё ещё pull_request: "
                                  "задание — переключить его на push")
+
+    # У push нет видов событий: types относится к pull_request. Останется —
+    # GitHub откажется читать файл, и workflow не запустится ни разу.
+    for key, value in (data.items() if isinstance(data, dict) else []):
+        if str(key).strip().lower() not in ("on", "true"):
+            continue
+        if isinstance(value, dict):
+            push = value.get("push")
+            if isinstance(push, dict) and "types" in {str(k).lower() for k in push}:
+                return report(False, "", "под push остался ключ types — он относится "
+                                         "к pull_request, у push видов событий нет. "
+                                         "GitHub откажется читать такой файл: "
+                                         "уберите эту строку")
 
     зашит = re.search(r'(?<!secrets\.)\b\d{8,}:[A-Za-z0-9_-]{30,}', text)
     if зашит:
