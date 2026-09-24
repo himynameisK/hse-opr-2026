@@ -179,6 +179,92 @@ def check_noexec():
 # В голом контейнере локаль может быть C, и тогда русский вывод падает
 # с UnicodeEncodeError вместо читаемого FAIL.
 
+GROUP = "shop"
+USERS = ("alice", "bob")
+OUTSIDER = "carol"
+SHARED = Path("/srv/shop/shared")
+
+
+
+
+def as_user(user, command):
+    """Выполняет команду от имени пользователя. Возвращает (код возврата, вывод).
+
+    umask задаём явно и одинаковый для всех запусков: иначе результат проверки
+    зависел бы от настроек оболочки, а не от прав на каталоге.
+    """
+    result = subprocess.run(
+        ["su", "-", user, "-c", "umask 022; " + command],
+        cwd="/", text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    return result.returncode, result.stdout.strip()
+
+
+def clear_shared():
+    """Убирает следы прошлых проверок. От root это можно независимо от sticky."""
+    if not SHARED.is_dir():
+        return
+    for entry in SHARED.iterdir():
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry, ignore_errors=True)
+        else:
+            try:
+                entry.unlink()
+            except OSError:
+                pass
+
+
+def user_name(uid):
+    """Имя владельца, а если такого в системе нет — голый номер."""
+    try:
+        return pwd.getpwuid(uid).pw_name
+    except KeyError:
+        return str(uid)
+
+
+def group_name(gid):
+    try:
+        return grp.getgrgid(gid).gr_name
+    except KeyError:
+        return str(gid)
+
+
+def primary_group(user):
+    return group_name(pwd.getpwnam(user).pw_gid)
+
+
+def in_group(user, group):
+    try:
+        entry = pwd.getpwnam(user)
+        members = grp.getgrnam(group)
+    except KeyError:
+        return False
+    return entry.pw_gid == members.gr_gid or user in members.gr_mem
+
+
+def group_of(path):
+    return group_name(path.stat().st_gid)
+
+
+def described(path):
+    """«root:shop 3770» — то, что студент увидел бы в ls -ld."""
+    info = path.stat()
+    return (f"{user_name(info.st_uid)}:{group_name(info.st_gid)} "
+            f"{oct(stat.S_IMODE(info.st_mode))[2:].zfill(4)}")
+
+
+def not_ready():
+    """Ни одну проверку нет смысла гонять, пока нет каталога и пользователей."""
+    if not SHARED.is_dir():
+        return f"нет каталога {SHARED} — разверните занятие заново: sudo bash setup.sh"
+    for user in USERS:
+        try:
+            pwd.getpwnam(user)
+        except KeyError:
+            return f"нет пользователя {user} — разверните занятие заново: sudo bash setup.sh"
+    return None
+
+
 def check_environment_sgid():
     problems = []
     if not SHARED.is_dir():
