@@ -62,6 +62,48 @@ cd ../opr-lab03/shop        # путь скрипт печатает сам
 на то, что **уходит в коммит**. Вы могли подготовить чистую версию, а потом
 дописать в файл токен — в индексе его не будет, и наоборот.
 
+#### Если хотите на Python
+
+Каркас выдан на bash, но проверка смотрит на поведение, а не на язык. Хотите
+Python — сотрите содержимое `.githooks/pre-commit` и начните с этого:
+
+```python
+#!/usr/bin/env python3
+import re, subprocess, sys
+
+def git(*args):
+    return subprocess.run(["git", *args], capture_output=True, text=True).stdout
+
+status = 0
+
+# ЗАПОЛНИТЬ: отклонить .env и любые .env.*
+for path in git("diff", "--cached", "--name-only", "--diff-filter=ACM").split():
+    name = path.rsplit("/", 1)[-1]
+    ...
+
+# добавленные строки индекса: с плюсом, но не служебные '+++'
+added = [line for line in git("diff", "--cached", "--diff-filter=ACM", "-U0").splitlines()
+         if line.startswith("+") and not line.startswith("+++")]
+
+# ЗАПОЛНИТЬ: шаблон присваивания секрета с непустым значением
+pattern = r""
+
+if pattern:
+    hits = [line for line in added if re.search(pattern, line)]
+    if hits:
+        print("pre-commit: похоже на секрет:", *hits, sep="\n", file=sys.stderr)
+        status = 1
+
+if status:
+    print("pre-commit: коммит остановлен. Обойти осознанно: git commit --no-verify",
+          file=sys.stderr)
+sys.exit(status)
+```
+
+Имя файла не меняется — он должен называться `pre-commit`, без расширения.
+Шебанг обязателен, и на Windows в Git Bash вместо `python3` может понадобиться
+`python`: проверьте, что отвечает `python3 --version`.
+
 ### `commit-msg` — требует номер задачи
 
 Принимает `SHOP-12 Добавить расчёт скидки`, отклоняет `Добавить расчёт скидки`
