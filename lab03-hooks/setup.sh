@@ -44,10 +44,56 @@ cp "$HERE/fixture/base/"*.py .
 cp "$HERE/fixture/check.py" check.py
 chmod +x check.py
 printf '__pycache__/\n' > .gitignore
+
+# Каркас pre-commit: вся возня с индексом уже написана, студент дописывает
+# два места. commit-msg он пишет сам с нуля — тот посильный.
+mkdir -p .githooks
+cat > .githooks/pre-commit <<'HOOK'
+#!/usr/bin/env bash
+# Git запускает этот скрипт перед созданием коммита.
+# Ненулевой код возврата — коммит отменён.
+set -uo pipefail
+
+status=0
+
+# --- 1. Файлы, которых в истории быть не должно ------------------------------
+# ЗАПОЛНИТЬ: отклонить .env (и .env.local, .env.prod — любые .env.*)
+while IFS= read -r file; do
+	case "$(basename "$file")" in
+		# сюда шаблон имени, а в теле: echo ... >&2; status=1
+		*) ;;
+	esac
+done < <(git diff --cached --name-only --diff-filter=ACM)
+
+# --- 2. Секрет в добавленных строках -----------------------------------------
+# Берём только добавленные строки индекса. '^[+]' именно в скобках: так шаблон
+# верен во всех реализациях grep. '+++' — служебная строка дифа, её убираем.
+added=$(git diff --cached --diff-filter=ACM -U0 | grep -E '^[+]' | grep -v '^[+][+][+]' || true)
+
+# ЗАПОЛНИТЬ: шаблон присваивания секрета с НЕПУСТЫМ значением.
+#   поймать:     API_KEY="AKIAIOSFODNN7EXAMPLE"   TOKEN=abc123   SECRET='...'
+#   НЕ поймать:  Не коммитьте токены и пароли.
+# Подсказка: важно не слово, а знак = и непустое значение после него.
+pattern=''
+
+if [[ -n "$pattern" ]] && printf '%s\n' "$added" | grep -qE "$pattern"; then
+	echo "pre-commit: похоже на секрет в добавленных строках:" >&2
+	printf '%s\n' "$added" | grep -E "$pattern" >&2
+	status=1
+fi
+
+if [[ $status -ne 0 ]]; then
+	echo "pre-commit: коммит остановлен. Обойти осознанно: git commit --no-verify" >&2
+fi
+exit $status
+HOOK
+chmod +x .githooks/pre-commit
+
 git add .
-git commit -q -m "Начальная версия магазина"
+git commit -q -m "Начальная версия магазина и каркас pre-commit"
 git tag start
 
 echo "Готово: $SHOP"
-echo "Хуков здесь пока нет — их вы напишете сами."
+echo "В .githooks лежит каркас pre-commit — в нём два места с пометкой ЗАПОЛНИТЬ."
+echo "commit-msg пишете сами. Включить хуки: git config core.hooksPath .githooks"
 echo "Условие: $HERE/README.md"
