@@ -75,6 +75,31 @@ lab04-linux/        занятие 4 — права, дескрипторы, о�
   fixture/          исходный проект и записанные доставки вебхука
 ```
 
+## Если хочется посмотреть, как это читают в MIT
+
+То, чем мы занимаемся, в обычной программе по computer science не преподают нигде —
+ни у нас, ни за границей. Алгоритмы и теорию читают, инструменты, которыми работают
+каждый день, — нет. В MIT этот пробел признали и завели отдельный курс: **The Missing
+Semester of Your CS Education**. Он идёт в январские сессии до сих пор, записи открыты.
+
+- Сайт курса: https://missing.csail.mit.edu/
+- Плейлист 2026 года: https://www.youtube.com/playlist?list=PLyzOVJj3bHQunmnnTXrNbZnBaCA-ieK4L
+- Плейлист 2020 года: https://www.youtube.com/playlist?list=PLyzOVJj3bHQuloKGG59rS43e29ro7I57J
+
+Что с чем соотносится у нас:
+
+| Наше занятие | Лекция Missing Semester |
+|---|---|
+| 1–3, Git | Version Control and Git |
+| 4–6, Linux | Course Overview + Introduction to the Shell; Command-line Environment |
+| 7–8, Bash | Command-line Environment; Debugging and Profiling |
+| 9–13, Docker и поставка | Packaging and Shipping Code |
+
+Смотреть не обязательно, на зачёт это не влияет. Но если какая-то тема не села —
+посмотреть то же самое в другом изложении часто помогает быстрее, чем перечитывать
+конспект. Учтите, что у них короче и без практики: разбираем руками мы, а не они.
+
+
 ## Требования
 
 git 2.23+, bash, Python 3.8+ (`python3`, `python` или `py` — любой из них).
