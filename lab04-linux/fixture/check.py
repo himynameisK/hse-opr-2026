@@ -33,7 +33,10 @@ def report(ok, success, failure):
 # ═══════════════ задание: script ═══════════════
 ROOT = Path(__file__).resolve().parent
 STUDENT = "opr"
-WORDS = {"s1": "ok-1", "s2": "ok-2", "s3": "ok-3", "s4": "ok-4", "s5": "ok-5"}
+WORDS = {"t1": "ok-1", "t2": "ok-2", "t3": "ok-3"}
+PATHS = {"t1": "./t1/script.sh", "t2": "./t2/script.sh", "t3": "./t3/config/script.sh"}
+CACHE = Path("/srv/cache")
+KEEP = ("data/report-2026-09.csv", "data/report-2026-08.csv", "data/service.conf")
 
 
 class Outcome:
@@ -100,7 +103,7 @@ def check_environment_script():
     return report(
         ok,
         f"окружение на месте: проверка идёт от root, запускает всё от {STUDENT}, "
-        "все пять каталогов целы",
+        "все каталоги заявок целы",
         "; ".join(problems),
     )
 
@@ -111,9 +114,9 @@ def printed_word(result):
 
 
 def check_plain(name):
-    """s1, s2, s4, s5 — сдаются одинаково: ./sN/script.sh печатает своё слово."""
+    """Заявки 1-3 сдаются одинаково: скрипт печатает своё слово."""
     word = WORDS[name]
-    script = f"./{name}/script.sh"
+    script = PATHS[name]
     result = as_student(script)
     ok = result.returncode == 0 and printed_word(result) == word
     printed = printed_word(result).replace("\r", "^M")
@@ -125,57 +128,39 @@ def check_plain(name):
     )
 
 
-def reseed_noexec_word():
-    """Кладёт в s3/script.sh свежее слово: run.sh обязан его запускать, а не знать."""
-    target = (ROOT / "s3" / "script.sh").resolve()
-    if not target.is_file():
-        return None, ("s3/script.sh больше никуда не ведёт: раздел с noexec пропал "
-                      "(так бывает после перезагрузки) — разверните лабу заново через setup.sh")
-    # Запрет на execve обязан быть на месте. Если ссылку подменили обычным файлом,
-    # задача про noexec просто исчезла, и проверять в s3 больше нечего.
-    if as_student("exec " + shlex.quote(str(target))).returncode == 0:
-        return None, ("s3/script.sh больше не лежит на разделе с noexec: похоже, ссылку "
-                      "заменили обычным файлом. Копию делает run.sh в момент запуска, "
-                      "а не вы вместо ссылки — разверните лабу заново через setup.sh")
-    data = target.read_bytes()
-    word = "ok-3-" + secrets.token_hex(2)
-    fresh, count = re.subn(rb"ok-3(-[0-9a-f]{4})?", word.encode("ascii"), data)
-    if not count:
-        return None, ("в s3/script.sh не осталось слова ok-3: верните файл как был "
-                      "(разверните лабу заново через setup.sh)")
-    with open(target, "r+b") as handle:
-        handle.write(fresh)
-        handle.truncate()
-    return word, None
-
-
-def check_noexec():
-    runner = ROOT / "s3" / "run.sh"
-    if not runner.is_file():
-        return report(False, "", "нет s3/run.sh — скрипт, который запускает s3/script.sh "
-                                 "и печатает его слово")
-    word, trouble = reseed_noexec_word()
-    if word is None:
-        return report(False, "", trouble)
-    result = as_student("./run.sh", cwd=ROOT / "s3")
-    ok = result.returncode == 0 and printed_word(result) == word
-    printed = printed_word(result).replace("\r", "^M")
-    if not ok and printed.startswith("ok-3"):
-        detail = (f"напечатал «{printed}», а script.sh в этот раз печатает «{word}»: "
-                  "значит run.sh печатает слово сам или запускает старую копию — "
-                  "копировать и запускать надо внутри run.sh")
-    elif printed:
-        detail = f"напечатал «{printed}», а ждали «{word}»"
-    else:
-        detail = f"«{complaint(result)}»"
+def check_inodes():
+    """Заявка 4: на /srv/cache кончились inode, а байты свободны."""
+    if not CACHE.is_dir():
+        return report(False, "", f"нет каталога {CACHE} — заявка 4 не развернулась. "
+                                 "Нужен loop-mount: в ВМ и WSL он есть, "
+                                 "в контейнере нужен флаг --privileged")
+    info = os.statvfs(CACHE)
+    if info.f_files > 4096:
+        return report(False, "", f"{CACHE} это уже не тот раздел: inode в нём "
+                                 f"{info.f_files}, а было 256. Раздел пересоздавать "
+                                 "не надо — надо понять, что именно их съело")
+    lost = [k for k in KEEP if not (CACHE / k).is_file()]
+    if lost:
+        return report(False, "", "вместе с мусором удалены нужные данные: "
+                                 + ", ".join(lost)
+                                 + " — чистить надо было выборочно")
+    probe = CACHE / ".probe-opr"
+    code, _ = as_user(STUDENT, f"touch {probe}")
+    ok = code == 0
+    if ok:
+        try: probe.unlink()
+        except OSError: pass
     return report(
         ok,
-        f"s3/run.sh запускает script.sh с раздела noexec и печатает его слово ({word})",
-        "cd s3 && ./run.sh от имени " + STUDENT + " не сработал: " + detail,
+        f"на {CACHE} снова создаются файлы, а отчёты и конфиг целы "
+        f"(свободно inode: {info.f_favail} из {info.f_files})",
+        f"на {CACHE} по-прежнему не создать файл: свободно inode "
+        f"{info.f_favail} из {info.f_files}. Место при этом есть — "
+        f"посмотрите df и df -i рядом",
     )
 
 
-# ═══════════════ задание: proc ═══════════════
+# ═══════════════ задание: общий каталог ═══════════════
 # В голом контейнере локаль может быть C, и тогда русский вывод падает
 # с UnicodeEncodeError вместо читаемого FAIL.
 
@@ -183,8 +168,6 @@ GROUP = "shop"
 USERS = ("alice", "bob")
 OUTSIDER = "carol"
 SHARED = Path("/srv/shop/shared")
-
-
 
 
 def as_user(user, command):
@@ -432,13 +415,13 @@ def check_outsider():
 
 
 checks = [
-    # script
-    check_plain("s1"),
-    check_plain("s2"),
-    check_noexec(),
-    check_plain("s4"),
-    check_plain("s5"),
-    # sgid
+    # заявки 1-4
+    check_environment_script(),
+    check_plain("t1"),
+    check_plain("t2"),
+    check_plain("t3"),
+    check_inodes(),
+    # общий каталог
     check_environment_sgid(),
     check_create_and_read(),
     check_group_inherited(),
