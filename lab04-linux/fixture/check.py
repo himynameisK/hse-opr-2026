@@ -26,6 +26,19 @@ if os.geteuid() != 0:
     sys.exit(2)
 
 
+_cascade_said = False
+
+
+def cascade():
+    """Зависимые проверки не повторяют одно и то же: печатаем один раз."""
+    global _cascade_said
+    if not _cascade_said:
+        print("····: остальные проверки каталога пропущены — "
+              "сначала добейтесь PASS на проверке выше")
+        _cascade_said = True
+    return False
+
+
 def report(ok, success, failure):
     print(f"{'PASS' if ok else 'FAIL'}: {success if ok else failure}")
     return ok
@@ -274,7 +287,7 @@ def check_environment_sgid():
     ok = not problems
     return report(
         ok,
-        f"каталог {SHARED} на месте, alice и bob состоят в группе {GROUP}",
+        f"окружение развёрнуто: каталог {SHARED}, группа {GROUP}, в ней alice и bob",
         "; ".join(problems),
     )
 
@@ -316,8 +329,7 @@ def check_group_inherited():
     code, _ = as_user("alice", f"printf 'наследование\\n' > {SHARED}/inherit.txt")
     created = SHARED / "inherit.txt"
     if code != 0 or not created.is_file():
-        return report(False, "", "alice не может создать файл в каталоге — "
-                                 "сначала добейтесь PASS на предыдущей проверке")
+        return cascade()
     actual = group_of(created)
     ok = actual == GROUP
     reason = (
@@ -342,8 +354,7 @@ def check_foreign_files_survive():
     for user in USERS:
         code, _ = as_user(user, f"printf 'файл {user}\\n' > {SHARED}/{user}.txt")
         if code != 0 or not (SHARED / f"{user}.txt").is_file():
-            return report(False, "", f"{user} не может создать файл в каталоге — "
-                                     "сначала добейтесь PASS на предыдущей проверке")
+            return cascade()
     kept, removed = {}, {}
     for actor, author in (("bob", "alice"), ("alice", "bob")):
         code, _ = as_user(actor, f"rm -f {SHARED}/{author}.txt")
@@ -391,8 +402,7 @@ def check_outsider():
     clear_shared()
     code, _ = as_user("alice", f"printf 'секрет\\n' > {SHARED}/alice.txt")
     if code != 0 or not (SHARED / "alice.txt").is_file():
-        return report(False, "", "alice не может создать файл в каталоге — "
-                                 "сначала добейтесь PASS на предыдущих проверках")
+        return cascade()
     listed, _ = as_user(OUTSIDER, f"ls {SHARED}")
     read, _ = as_user(OUTSIDER, f"cat {SHARED}/alice.txt")
     wrote, _ = as_user(OUTSIDER, f"printf 'я тут был\\n' > {SHARED}/{OUTSIDER}.txt")
