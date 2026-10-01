@@ -1,14 +1,8 @@
 #!/usr/bin/env python3
-"""Автопроверка занятия 4: права, файловые дескрипторы, общий каталог."""
-import grp
-import hashlib
+"""Автопроверка занятия 4: четыре заявки дежурной смены."""
 import os
 import pwd
-import re
-import secrets
-import shlex
 import shutil
-import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -21,22 +15,9 @@ for _s in (sys.stdout, sys.stderr):
 
 
 if os.geteuid() != 0:
-    print("Проверку запускать от root: ей нужен su, чтобы работать за opr,")
-    print("за alice, за bob и за carol.  sudo /opt/opr-lab04/check.py")
+    print("Проверку запускать от root: ей нужен su, чтобы работать за opr.")
+    print("  sudo /opt/opr-lab04/check.py")
     sys.exit(2)
-
-
-_cascade_said = False
-
-
-def cascade():
-    """Зависимые проверки не повторяют одно и то же: печатаем один раз."""
-    global _cascade_said
-    if not _cascade_said:
-        print("····: остальные проверки каталога пропущены — "
-              "сначала добейтесь PASS на проверке выше")
-        _cascade_said = True
-    return False
 
 
 def report(ok, success, failure):
@@ -61,6 +42,15 @@ class Outcome:
         self.stderr = stderr
 
 
+
+
+def as_user(user, command):
+    """Выполняет команду от имени пользователя. Возвращает (код возврата, вывод)."""
+    result = subprocess.run(
+        ["su", "-", user, "-c", "umask 022; " + command],
+        cwd="/", text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    return result.returncode, result.stdout.strip()
 
 
 def as_student(command, cwd=None):
@@ -173,270 +163,11 @@ def check_inodes():
     )
 
 
-# ═══════════════ задание: общий каталог ═══════════════
-# В голом контейнере локаль может быть C, и тогда русский вывод падает
-# с UnicodeEncodeError вместо читаемого FAIL.
-
-GROUP = "shop"
-USERS = ("alice", "bob")
-OUTSIDER = "carol"
-SHARED = Path("/srv/shop/shared")
-
-
-def as_user(user, command):
-    """Выполняет команду от имени пользователя. Возвращает (код возврата, вывод).
-
-    umask задаём явно и одинаковый для всех запусков: иначе результат проверки
-    зависел бы от настроек оболочки, а не от прав на каталоге.
-    """
-    result = subprocess.run(
-        ["su", "-", user, "-c", "umask 022; " + command],
-        cwd="/", text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-    )
-    return result.returncode, result.stdout.strip()
-
-
-def clear_shared():
-    """Убирает следы прошлых проверок. От root это можно независимо от sticky."""
-    if not SHARED.is_dir():
-        return
-    for entry in SHARED.iterdir():
-        if entry.is_dir() and not entry.is_symlink():
-            shutil.rmtree(entry, ignore_errors=True)
-        else:
-            try:
-                entry.unlink()
-            except OSError:
-                pass
-
-
-def user_name(uid):
-    """Имя владельца, а если такого в системе нет — голый номер."""
-    try:
-        return pwd.getpwuid(uid).pw_name
-    except KeyError:
-        return str(uid)
-
-
-def group_name(gid):
-    try:
-        return grp.getgrgid(gid).gr_name
-    except KeyError:
-        return str(gid)
-
-
-def primary_group(user):
-    return group_name(pwd.getpwnam(user).pw_gid)
-
-
-def in_group(user, group):
-    try:
-        entry = pwd.getpwnam(user)
-        members = grp.getgrnam(group)
-    except KeyError:
-        return False
-    return entry.pw_gid == members.gr_gid or user in members.gr_mem
-
-
-def group_of(path):
-    return group_name(path.stat().st_gid)
-
-
-def described(path):
-    """«root:shop 3770» — то, что студент увидел бы в ls -ld."""
-    info = path.stat()
-    return (f"{user_name(info.st_uid)}:{group_name(info.st_gid)} "
-            f"{oct(stat.S_IMODE(info.st_mode))[2:].zfill(4)}")
-
-
-def not_ready():
-    """Ни одну проверку нет смысла гонять, пока нет каталога и пользователей."""
-    if not SHARED.is_dir():
-        return f"нет каталога {SHARED} — разверните занятие заново: sudo bash setup.sh"
-    for user in USERS:
-        try:
-            pwd.getpwnam(user)
-        except KeyError:
-            return f"нет пользователя {user} — разверните занятие заново: sudo bash setup.sh"
-    return None
-
-
-def check_environment_sgid():
-    problems = []
-    if not SHARED.is_dir():
-        problems.append(f"нет каталога {SHARED}")
-    try:
-        grp.getgrnam(GROUP)
-    except KeyError:
-        problems.append(f"нет группы {GROUP}")
-    for user in USERS:
-        try:
-            pwd.getpwnam(user)
-        except KeyError:
-            problems.append(f"нет пользователя {user}")
-            continue
-        if not in_group(user, GROUP):
-            problems.append(f"{user} не состоит в группе {GROUP}")
-        elif primary_group(user) == GROUP:
-            # Иначе наследование группы у файлов вышло бы само собой, и SGID
-            # на каталоге было бы ни при чём: проверка потеряла бы смысл.
-            problems.append(f"у {user} сделали {GROUP} основной группой — верните "
-                            f"как было (usermod -g {user} {user}) или разверните "
-                            f"занятие заново: группу файлам должен отдавать "
-                            f"каталог, а не пользователь")
-    ok = not problems
-    return report(
-        ok,
-        f"окружение развёрнуто: каталог {SHARED}, группа {GROUP}, в ней alice и bob",
-        "; ".join(problems),
-    )
-
-
-def check_create_and_read():
-    problem = not_ready()
-    if problem:
-        return report(False, "", problem)
-    clear_shared()
-    created, read_foreign = {}, {}
-    for user in USERS:
-        code, _ = as_user(
-            user, f"printf 'строка от {user}\\n' > {SHARED}/{user}.txt")
-        created[user] = code == 0 and (SHARED / f"{user}.txt").is_file()
-    for reader, author in (("bob", "alice"), ("alice", "bob")):
-        if not created.get(author):
-            read_foreign[reader] = False
-            continue
-        code, output = as_user(reader, f"cat {SHARED}/{author}.txt")
-        read_foreign[reader] = code == 0 and f"строка от {author}" in output
-    ok = all(created.values()) and all(read_foreign.values())
-    cannot_create = [user for user in USERS if not created[user]]
-    return report(
-        ok,
-        "alice и bob создают файлы в общем каталоге и читают файлы друг друга",
-        f"не может создать файл в каталоге: {', '.join(cannot_create)} — сейчас "
-        f"{SHARED} это {described(SHARED)}, а группе {GROUP} нужны rwx"
-        if cannot_create else
-        "файл, созданный одним, не читается другим: группе нужен доступ и в каталог, "
-        "и к файлам в нём",
-    )
-
-
-def check_group_inherited():
-    problem = not_ready()
-    if problem:
-        return report(False, "", problem)
-    clear_shared()
-    code, _ = as_user("alice", f"printf 'наследование\\n' > {SHARED}/inherit.txt")
-    created = SHARED / "inherit.txt"
-    if code != 0 or not created.is_file():
-        return cascade()
-    actual = group_of(created)
-    ok = actual == GROUP
-    reason = (
-        f"каталог принадлежит группе {group_of(SHARED)}, а должен {GROUP}: "
-        f"наследуется та группа, что стоит на каталоге"
-        if group_of(SHARED) != GROUP else
-        f"на каталоге нет бита SGID (сейчас {described(SHARED)}), и новый файл "
-        f"забирает основную группу того, кто его создал"
-    )
-    return report(
-        ok,
-        f"файл, созданный в каталоге, достаётся группе {GROUP}, а не создателю",
-        f"файл alice получил группу {actual}, а должен {GROUP} — {reason}",
-    )
-
-
-def check_foreign_files_survive():
-    problem = not_ready()
-    if problem:
-        return report(False, "", problem)
-    clear_shared()
-    for user in USERS:
-        code, _ = as_user(user, f"printf 'файл {user}\\n' > {SHARED}/{user}.txt")
-        if code != 0 or not (SHARED / f"{user}.txt").is_file():
-            return cascade()
-    kept, removed = {}, {}
-    for actor, author in (("bob", "alice"), ("alice", "bob")):
-        code, _ = as_user(actor, f"rm -f {SHARED}/{author}.txt")
-        kept[actor] = code != 0 and (SHARED / f"{author}.txt").is_file()
-    for user in USERS:
-        code, _ = as_user(user, f"rm -f {SHARED}/{user}.txt")
-        removed[user] = code == 0 and not (SHARED / f"{user}.txt").exists()
-    ok = all(kept.values()) and all(removed.values())
-    lost = [f"{author}.txt" for actor, author in (("bob", "alice"), ("alice", "bob"))
-            if not kept[actor]]
-    info = SHARED.stat()
-    owner = user_name(info.st_uid)
-    if not lost:
-        failure = ("свой собственный файл должен удаляться, а он не удалился: "
-                   f"у группы {GROUP} должны остаться rwx на каталоге")
-    elif not info.st_mode & stat.S_ISVTX:
-        failure = (f"чужой файл удалился: {', '.join(lost)} — в общем каталоге нужен "
-                   "sticky-бит, иначе право на запись в каталог разрешает стереть "
-                   "что угодно")
-    elif owner in USERS:
-        # Классическая ловушка: sticky стоит, а каталог отдали одному из двоих.
-        failure = (f"чужой файл удалился: {', '.join(lost)} — sticky-бит на месте, "
-                   f"но каталог принадлежит пользователю {owner}, а владельцу "
-                   f"каталога sticky удалять не мешает. Каталог должен остаться "
-                   f"за root (сейчас {described(SHARED)})")
-    else:
-        failure = (f"чужой файл удалился: {', '.join(lost)} — сейчас "
-                   f"{SHARED} это {described(SHARED)}")
-    return report(ok, "чужой файл удалить не выходит, свой удаляется", failure)
-
-
-def check_outsider():
-    problem = not_ready()
-    if problem:
-        return report(False, "", problem)
-    try:
-        pwd.getpwnam(OUTSIDER)
-    except KeyError:
-        return report(False, "", f"нет пользователя {OUTSIDER} — она в занятии за "
-                                 f"постороннюю; разверните заново: sudo bash setup.sh")
-    if in_group(OUTSIDER, GROUP):
-        return report(False, "", f"{OUTSIDER} оказалась в группе {GROUP} — она "
-                                 f"посторонняя, уберите её оттуда или разверните "
-                                 f"занятие заново")
-    clear_shared()
-    code, _ = as_user("alice", f"printf 'секрет\\n' > {SHARED}/alice.txt")
-    if code != 0 or not (SHARED / "alice.txt").is_file():
-        return cascade()
-    listed, _ = as_user(OUTSIDER, f"ls {SHARED}")
-    read, _ = as_user(OUTSIDER, f"cat {SHARED}/alice.txt")
-    wrote, _ = as_user(OUTSIDER, f"printf 'я тут был\\n' > {SHARED}/{OUTSIDER}.txt")
-    managed = []
-    if listed == 0:
-        managed.append("смотрит список файлов")
-    if read == 0:
-        managed.append("читает чужой файл")
-    if wrote == 0:
-        managed.append("создаёт свои файлы")
-    ok = not managed
-    return report(
-        ok,
-        f"{OUTSIDER} в группе {GROUP} не состоит и в каталог не попадает",
-        f"{OUTSIDER} в группе {GROUP} не состоит, а всё равно {', '.join(managed)} — "
-        f"сейчас {SHARED} это {described(SHARED)}, и последняя тройка битов не "
-        f"должна давать посторонним ничего",
-    )
-
-
-
 checks = [
-    # заявки 1-4
     check_environment_script(),
     check_plain("t1"),
     check_plain("t2"),
     check_plain("t3"),
     check_inodes(),
-    # общий каталог
-    check_environment_sgid(),
-    check_create_and_read(),
-    check_group_inherited(),
-    check_foreign_files_survive(),
-    check_outsider(),
 ]
-clear_shared()
 sys.exit(0 if all(checks) else 1)
