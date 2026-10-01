@@ -25,7 +25,7 @@ done
 
 if [ -e "$LAB/check.py" ]; then
   echo "Лаба уже развёрнута: $LAB" >&2
-  echo "Удалите её сами: rm -rf \"$LAB\"" >&2
+  echo "Чтобы начать заново: sudo bash $HERE/reset.sh" >&2
   exit 1
 fi
 
@@ -33,9 +33,12 @@ fi
 mkdir -p "$LAB"
 install -m 0755 "$HERE/fixture/check.py" "$LAB/check.py"
 
+# Код 3 от части — «развернуть не дали, но это не беда»: так выходит заявка 4,
+# когда в контейнере нет --privileged. Остальные части должны развернуться.
 for p in "$HERE"/parts/setup-*.sh; do
   echo "── $(basename "$p")"
-  bash "$p" "$LAB"
+  rc=0; bash "$p" "$LAB" || rc=$?
+  [ "$rc" = 0 ] || [ "$rc" = 3 ] || exit "$rc"
 done
 echo
 echo "Готово: $LAB"
