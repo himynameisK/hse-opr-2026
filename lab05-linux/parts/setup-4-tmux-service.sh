@@ -26,10 +26,20 @@ if command -v systemctl >/dev/null && [ -d /run/systemd/system ]; then
   rm -f /etc/systemd/system/opr-api.service
   systemctl daemon-reload 2>/dev/null || true
 fi
-for entry in /proc/[0-9]*; do
-  [ -r "$entry/cmdline" ] || continue
-  tr '\0' ' ' < "$entry/cmdline" 2>/dev/null | grep -q "$API" || continue
-  kill -9 "${entry#/proc/}" 2>/dev/null || true
+# Процессы службы ищем по argv[0], а не по вхождению пути в командную строку:
+# иначе под kill попадает всё, где путь просто упомянут в аргументах, —
+# редактор с открытым юнитом, grep по /etc или шелл самого студента.
+pids_of() {
+  local path="$1" entry argv0
+  for entry in /proc/[0-9]*; do
+    [ -r "$entry/cmdline" ] || continue
+    argv0="$(tr '\0' '\n' < "$entry/cmdline" 2>/dev/null | head -1)"
+    [ "$argv0" = "$path" ] || continue
+    echo "${entry#/proc/}"
+  done
+}
+for pid in $(pids_of "$API"); do
+  kill -9 "$pid" 2>/dev/null || true
 done
 sleep 0.5
 

@@ -24,12 +24,23 @@ mkdir -p "$STATE_DIR" "$LAB/t3" "$(dirname "$COLLECTOR")"
 
 id "$USER_NAME" >/dev/null 2>&1 || useradd -m -s /bin/bash "$USER_NAME"
 
+# Процессы службы ищем по argv[0], а не по вхождению пути в командную строку:
+# иначе под kill попадает всё, где путь просто упомянут в аргументах, —
+# редактор с открытым юнитом, grep по /etc или шелл самого студента.
+pids_of() {
+  local path="$1" entry argv0
+  for entry in /proc/[0-9]*; do
+    [ -r "$entry/cmdline" ] || continue
+    argv0="$(tr '\0' '\n' < "$entry/cmdline" 2>/dev/null | head -1)"
+    [ "$argv0" = "$path" ] || continue
+    echo "${entry#/proc/}"
+  done
+}
+
 # Прошлый сборщик останавливаем: иначе зомби с прошлого запуска останутся висеть
 # на мёртвом state, и проверка будет искать не того родителя.
-for entry in /proc/[0-9]*; do
-  [ -r "$entry/cmdline" ] || continue
-  tr '\0' ' ' < "$entry/cmdline" 2>/dev/null | grep -q "$COLLECTOR" || continue
-  kill -9 "${entry#/proc/}" 2>/dev/null || true
+for pid in $(pids_of "$COLLECTOR"); do
+  kill -9 "$pid" 2>/dev/null || true
 done
 
 # Служба сборки отчётов. Поломка одна и ровно в одной отсутствующей строке:

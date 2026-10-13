@@ -15,13 +15,23 @@ for session in tariffs tariffs-old nightly tmp api; do
   tmux kill-session -t "$session" 2>/dev/null || true
 done
 
-# 2. Остановить учебные службы. Ищем по командной строке, а не по имени: так
-#    под kill не попадёт чужой процесс с похожим названием в аргументах.
-for name in /usr/local/sbin/opr-auditd /usr/local/sbin/opr-collector /usr/local/sbin/opr-api; do
+# 2. Остановить учебные службы.
+# Процессы службы ищем по argv[0], а не по вхождению пути в командную строку:
+# иначе под kill попадает всё, где путь просто упомянут в аргументах, —
+# редактор с открытым юнитом, grep по /etc или шелл самого студента.
+pids_of() {
+  local path="$1" entry argv0
   for entry in /proc/[0-9]*; do
     [ -r "$entry/cmdline" ] || continue
-    tr '\0' ' ' < "$entry/cmdline" 2>/dev/null | grep -q "$name" || continue
-    kill -9 "${entry#/proc/}" 2>/dev/null || true
+    argv0="$(tr '\0' '\n' < "$entry/cmdline" 2>/dev/null | head -1)"
+    [ "$argv0" = "$path" ] || continue
+    echo "${entry#/proc/}"
+  done
+}
+
+for name in /usr/local/sbin/opr-auditd /usr/local/sbin/opr-collector /usr/local/sbin/opr-api; do
+  for pid in $(pids_of "$name"); do
+    kill -9 "$pid" 2>/dev/null || true
   done
 done
 # 3. Убрать юнит, которым студент заменил запуск из tmux. Имя он выбирал сам,

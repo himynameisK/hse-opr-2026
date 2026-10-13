@@ -34,6 +34,19 @@ docker run -it --rm -v "$PWD":/course debian:12 bash  # где есть Docker
 printf '[boot]\nsystemd=true\n' | sudo tee /etc/wsl.conf   # потом wsl --shutdown
 ```
 
+Если виртуалки нет совсем, а четвёртую заявку сделать хочется — в репозитории
+лежит образ, внутри которого systemd загружает систему по-настоящему:
+
+```bash
+docker build -t opr-lab05 lab05-linux/docker
+docker run -d --name lab05 --privileged --cgroupns=host \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v "$PWD":/course:ro opr-lab05
+docker exec -it lab05 bash          # и внутри: bash /course/lab05-linux/setup.sh
+```
+
+Флаги `--privileged` и `--cgroupns=host` нужны именно systemd: без них он
+не поднимется. Убрать за собой — `docker rm -f lab05`.
+
 На macOS и в Windows **напрямую** задание не живёт: там нет ни `/proc`,
 ни сигналов в том виде, о котором идёт речь.
 
