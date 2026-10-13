@@ -4,8 +4,9 @@ LAB1_DEST ?=
 LAB2_DEST ?=
 LAB3_DEST ?=
 LAB4_DEST ?=
+LAB5_DEST ?=
 
-.PHONY: lab1 lab2 lab3 lab3-gitflow lab4
+.PHONY: lab1 lab2 lab3 lab3-gitflow lab4 lab5
 lab1:
 	@bash lab01-git/setup.sh "$(LAB1_DEST)"
 
@@ -21,3 +22,7 @@ lab3-gitflow:
 # Занятие 4 разворачивается ВНУТРИ Linux и от root: нужны useradd и mount.
 lab4:
 	@sudo bash lab04-linux/setup.sh "$(LAB4_DEST)"
+
+# Занятие 5 разворачивается ВНУТРИ Linux и от root: нужны /proc, /etc и systemd.
+lab5:
+	@sudo bash lab05-linux/setup.sh "$(LAB5_DEST)"
