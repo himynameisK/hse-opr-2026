@@ -28,13 +28,6 @@ def report(ok, success, failure):
     return ok
 
 
-def skip(why):
-    """Заявка, которую на этой машине сделать нельзя. Не зачёт и не провал:
-    на код возврата не влияет, чтобы студент в контейнере не видел FAIL
-    за то, чего от него не зависит."""
-    print(f"ПРОПУСК: {why}")
-    return True
-
 
 STATE = Path("/var/lib/opr-lab05/state")
 
@@ -312,9 +305,10 @@ def check_api(state):
         return report(False, "", "в состоянии занятия нет API: "
                                  "разверните лабу заново через reset.sh")
     if not Path("/run/systemd/system").is_dir():
-        return skip("заявка 4 — PID 1 здесь не systemd, юнитов и автозапуска нет. "
-                    "Она делается в виртуальной машине или в WSL с systemd; "
-                    "остальные три от этого не зависят, и шести PASS достаточно")
+        return report(False, "", "заявка 4 не сделана: PID 1 здесь не systemd, "
+                                 "юнитов и автозапуска нет. Её сдают из виртуальной "
+                                 "машины, из WSL с systemd=true или из образа "
+                                 "lab05-linux/docker — см. README")
     running = processes_with(api)
     if not running:
         return report(False, "", f"{api} не работает нигде: его надо не погасить, "
