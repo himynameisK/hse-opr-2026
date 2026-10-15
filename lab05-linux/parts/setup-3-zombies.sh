@@ -73,8 +73,20 @@ cat > "$LAB/t3/report.sh" <<EOF
 # На сервере такой лимит стоит в /etc/security/limits.d/opr.conf.
 ulimit -u $NPROC
 
+# Сначала смотрим, хватит ли мест в таблице процессов. Полагаться на то,
+# что fork сам упадёт, нельзя: bash повторяет попытку, и часть задач
+# всё-таки пролезает — симптом получается мигающий.
+LIMIT=\$(ulimit -u)
+USED=\$(ps -u "\$(id -un)" --no-headers 2>/dev/null | wc -l)
+FREE=\$((LIMIT - USED))
+if [ "\$FREE" -lt 25 ]; then
+  echo "report: в таблице процессов занято \$USED мест из \$LIMIT, свободно \$FREE," >&2
+  echo "        а нужно 25. Выгрузка не запускается." >&2
+  exit 1
+fi
+
 for task in \$(seq 1 25); do
-  ( sleep 0.2; echo "задача \$task: готово" > /dev/null ) &
+  ( sleep 0.2 ) &
 done
 wait
 echo ok-3
