@@ -30,6 +30,10 @@ RUN apt-get update \
 
 # Иначе docker stop ждёт десять секунд и бьёт SIGKILL: systemd завершается
 # по SIGRTMIN+3, а не по SIGTERM.
+# Без локали tmux считает терминал не-UTF-8 и рисует кириллицу подчёркиваниями.
+# История панели при этом цела — ломается только показ.
+ENV LANG=C.UTF-8
+
 STOPSIGNAL SIGRTMIN+3
 
 CMD ["/sbin/init"]
