@@ -1,0 +1,11 @@
+Задача 5. Число единичных битов
+Сдавать: файл 5.sh. Аргументы приходят в $1, $2…; вывести одну строку — ровно ответ.
+Вход: неотрицательное целое.
+  ./5.sh 1234   →   5
+  ./5.sh 0   →   0
+
+──────── Условие (на английском) ────────
+
+Write a function that takes an integer as input, and returns the number of bits that are equal to one in the binary representation of that number. You can guarantee that input is non-negative.
+
+Example: The binary representation of 1234 is 10011010010, so the function should return 5 in this case

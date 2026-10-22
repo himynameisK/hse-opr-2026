@@ -1,0 +1,15 @@
+Задача 9. Проверка пароля
+Сдавать: файл 9.sh. Аргументы приходят в $1, $2…; вывести одну строку — ровно ответ.
+Вывести true или false — строчными буквами.
+  ./9.sh 4fdg5Fj3   →   true
+  ./9.sh dsF43   →   false
+
+──────── Условие (на английском) ────────
+
+You need to write regex that will validate a password to make sure it meets the following criteria:
+
+    At least six characters long
+    contains a lowercase letter
+    contains an uppercase letter
+    contains a digit
+    only contains alphanumeric characters (note that '_' is not alphanumeric)
