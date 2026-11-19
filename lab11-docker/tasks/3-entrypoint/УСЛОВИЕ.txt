@@ -1,0 +1,21 @@
+Задача 3. Утилита не принимает аргументы
+
+Образ-утилита приветствует по имени. Без аргументов работает:
+
+  docker build -t opr11-greet .
+  docker run --rm opr11-greet                       Привет, студент!
+
+А с аргументами — нет:
+
+  docker run --rm opr11-greet --name Ivan
+  docker: Error response from daemon: … exec: "--name": executable file not found in $PATH
+
+Нужно, чтобы образ вызывался как обычная команда, аргументы шли прямо в greet.py:
+
+  docker run --rm opr11-greet                              Привет, студент!
+  docker run --rm opr11-greet --name Ivan                  Привет, Ivan!
+  docker run --rm opr11-greet --anon                       Привет, незнакомец!
+  docker run --rm opr11-greet --name "Анна Мария" --shout  ПРИВЕТ, АННА МАРИЯ!
+
+Менять можно: Dockerfile. Нельзя: greet.py.
+Проверить: python3 check.py 3

@@ -1,0 +1,23 @@
+Задача 7. Сервис падает при первом запуске
+
+Сервис заказов app и его база db (PostgreSQL) в одном compose.yaml.
+
+  docker compose up -d --build
+  docker compose ps -a
+  docker compose logs app
+
+app в статусе Exited (1), в логах «не могу подключиться к базе db:5432:
+Connection refused» (или «the database system is starting up»). Если через
+десять секунд сделать docker compose up -d ещё раз — app поднимается
+и /health отвечает ok. depends_on: [db] в файле есть.
+
+Нужно: на свежей машине (база инициализируется с нуля) одна команда
+docker compose up -d поднимает всё, app стартует с первого раза — ни одного
+падения и перезапуска, — и /health отвечает 200 «ok».
+Менять можно: compose.yaml. Нельзя: app/app.py, app/Dockerfile.
+Порты наружу публиковать не нужно: check.py ходит в /health изнутри контейнера app.
+
+Как посмотреть самому:
+  docker compose exec app python3 -c "import urllib.request as u; print(u.urlopen('http://localhost:8000/health').read().decode())"
+Уберите за собой: docker compose down -v
+Проверить: python3 check.py 7

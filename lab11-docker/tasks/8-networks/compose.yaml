@@ -1,0 +1,17 @@
+# Витрина front → api → база db. Снаружи доступен только front.
+services:
+  front:
+    build: ./app
+    command: ["python3", "front.py"]
+    networks: [frontnet]
+  api:
+    build: ./app
+    command: ["python3", "api.py"]
+    networks: [backnet]
+  db:
+    image: redis:7-alpine
+    networks: [backnet, frontnet]
+
+networks:
+  frontnet:
+  backnet:

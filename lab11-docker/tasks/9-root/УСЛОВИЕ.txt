@@ -1,0 +1,21 @@
+Задача 9. Сервис работает от root
+
+Счётчик посещений пишет каждое посещение в /app/data/visits.log.
+
+  docker build -t opr11-root .
+  docker run -d --rm --name opr11-root -p 8080:8000 opr11-root
+  curl http://localhost:8080/                       посещений: 1
+  docker exec opr11-root id                         uid=0(root) gid=0(root)
+  docker top opr11-root
+
+Аудит: процесс сервиса работает от root. Уязвимость в коде — и у атакующего
+root внутри контейнера, а при ошибке в изоляции — и на хосте.
+
+Нужно:
+  - ни один процесс контейнера не работает с uid 0;
+  - сервис по-прежнему пишет в /app/data и отвечает «посещений: N»,
+    в том числе когда /app/data — новый именованный том
+    (docker run -v opr11-data:/app/data …).
+Менять можно: Dockerfile. Нельзя: app.py. Флаг docker run --user не в счёт:
+check.py запускает контейнер сам, без него.
+Проверить: python3 check.py 9

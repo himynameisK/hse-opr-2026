@@ -1,0 +1,5 @@
+# Хранилище заметок. Redis с журналом AOF: каждая запись попадает на диск.
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]

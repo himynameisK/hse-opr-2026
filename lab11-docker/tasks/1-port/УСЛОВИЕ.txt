@@ -1,0 +1,21 @@
+Задача 1. Порт проброшен, а сервис не отвечает
+
+Справочная служба на Python. Собираем и запускаем, как написано в инструкции:
+
+  docker build -t opr11-port .
+  docker run -d --rm --name opr11-port -p 8080:8000 opr11-port
+  curl http://localhost:8080/
+
+Контейнер работает (docker ps), порт опубликован (docker port opr11-port),
+в docker logs нет ошибок. А curl получает пустой ответ или обрыв соединения:
+  curl: (52) Empty reply from server        или        Connection reset by peer
+Если зайти внутрь — docker exec opr11-port python3 -c "import urllib.request as u;
+print(u.urlopen('http://127.0.0.1:8000/').read().decode())" — служба отвечает.
+
+Нужно: с хоста по опубликованному порту приходит «справочная служба: работает».
+Менять можно: Dockerfile. Нельзя: server.py.
+Проверка запускает контейнер сама, своей командой docker run -p … (флаги запуска
+вы не выбираете) и стучится с хоста.
+
+Не забудьте убрать за собой: docker rm -f opr11-port
+Проверить: python3 check.py 1

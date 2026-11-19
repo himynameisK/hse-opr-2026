@@ -1,0 +1,21 @@
+Задача 11. docker stop ждёт, а потом убивает
+
+Обработчик очереди при остановке должен дописать задания и напечатать
+«graceful shutdown». Так он и делает, если нажать Ctrl+C у себя в терминале.
+
+  docker build -t opr11-signals .
+  docker run -d --name opr11-signals opr11-signals
+  time docker stop -t 10 opr11-signals              десять секунд тишины
+  docker logs opr11-signals                         «graceful shutdown» нет
+  docker inspect -f '{{.State.ExitCode}}' opr11-signals          137
+
+docker stop каждый раз ждёт весь тайм-аут целиком, а потом контейнер
+убивают: код 137, задания недописаны. При выкладке так останавливается
+каждый экземпляр.
+
+Нужно: docker stop -t 5 останавливает контейнер за пару секунд, в логах есть
+«graceful shutdown», код выхода 0. Каталог очереди, как и раньше, готовится
+перед стартом обработчика.
+Менять можно: Dockerfile и entrypoint.sh. Нельзя: app.py.
+Уберите за собой: docker rm opr11-signals
+Проверить: python3 check.py 11

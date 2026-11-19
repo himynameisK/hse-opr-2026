@@ -1,0 +1,23 @@
+Задача 6. После перезапуска данные пропали
+
+Хранилище заметок — Redis в compose. Журнал AOF включён: каждая запись
+сохраняется на диск, это видно в redis-cli CONFIG GET appendonly.
+
+  docker compose up -d
+  docker compose exec redis redis-cli SET note:1 "купить молоко"
+  docker compose exec redis redis-cli GET note:1          "купить молоко"
+  docker compose down
+  docker compose up -d
+  docker compose exec redis redis-cli GET note:1          (nil)
+
+Заметки пропадают после каждого down/up — например, после обновления версии
+Redis или перезагрузки сервера.
+
+Нужно:
+  - после docker compose down и up данные на месте;
+  - docker compose down -v, как и положено, стирает всё: после него и up — пусто;
+  - сервис по-прежнему называется redis.
+Менять можно: compose.yaml. Порты наружу публиковать не нужно.
+Проверить: python3 check.py 6
+
+В конце уберите за собой: docker compose down -v

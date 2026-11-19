@@ -1,0 +1,24 @@
+Задача 8. Витрина не видит api, зато видит базу
+
+Три сервиса: front (витрина) → api → db (Redis). front ходит в api по имени
+api:8000, api — в базу по имени db:6379.
+
+  docker compose up -d --build
+  docker compose exec front python3 -c "import urllib.request as u; print(u.urlopen('http://localhost:8000/').read().decode())"
+
+Витрина отвечает 502: «front: api недоступен … Name or service not known».
+А аудит безопасности вдобавок нашёл, что из контейнера front открывается
+соединение прямо с базой:
+
+  docker compose exec front python3 -c "import socket; socket.create_connection(('db', 6379), 3); print('база открыта')"
+
+Нужно:
+  - front по имени api получает ответ: «front → api → db: PONG»;
+  - api по имени db достаёт до базы;
+  - из front до базы не достучаться никак: ни по имени, ни по IP-адресу
+    контейнера db, ни через опубликованный порт.
+Менять можно: compose.yaml. Нельзя: код в app/. Имена сервисов front, api, db
+не менять. Порты наружу публиковать не нужно: check.py ходит изнутри контейнеров.
+
+Уберите за собой: docker compose down
+Проверить: python3 check.py 8
